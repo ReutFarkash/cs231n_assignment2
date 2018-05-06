@@ -270,6 +270,8 @@ class FullyConnectedNet(object):
             batch_cache_key = 'batch_cache' + str(k)
             gamma_key = 'gamma' + str(k)
             beta_key = 'beta' + str(k)
+            d_key = 'd' + str(k)
+            d_cache_key = 'd_cache' + str(k)
             if k == 1:
                 par[z_key], par[z_cache_key] = affine_forward(X, self.params[W_key], self.params[b_key])
                 if self.use_batchnorm:
@@ -278,14 +280,24 @@ class FullyConnectedNet(object):
                 else:
                     par[a_key], par[a_cache_key] = relu_forward(par[z_key])
             elif k < self.num_layers:
-                par[z_key], par[z_cache_key] = affine_forward(par[a_prev_key], self.params[W_key], self.params[b_key])
+                if self.use_dropout:
+                    par[d_key], par[d_cache_key] = dropout_forward(par[a_prev_key], self.dropout_param)
+                    par[z_key], par[z_cache_key] = affine_forward(par[d_key], self.params[W_key], self.params[b_key])
+                else:
+                    par[z_key], par[z_cache_key] = affine_forward(par[a_prev_key], self.params[W_key], self.params[b_key])
+                #par[z_key], par[z_cache_key] = affine_forward(par[a_prev_key], self.params[W_key], self.params[b_key])
                 if self.use_batchnorm:
                     par[batch_key], par[batch_cache_key] = batchnorm_forward(par[z_key], self.params[gamma_key], self.params[beta_key], self.bn_params[k-1])
                     par[a_key], par[a_cache_key] = relu_forward(par[batch_key])
                 else:
                     par[a_key], par[a_cache_key] = relu_forward(par[z_key])
             else:
-                par[z_key], par[z_cache_key] = affine_forward(par[a_prev_key], self.params[W_key], self.params[b_key])
+                if self.use_dropout:
+                    par[d_key], par[d_cache_key] = dropout_forward(par[a_prev_key], self.dropout_param)
+                    par[z_key], par[z_cache_key] = affine_forward(par[d_key], self.params[W_key], self.params[b_key])
+                else:
+                    par[z_key], par[z_cache_key] = affine_forward(par[a_prev_key], self.params[W_key], self.params[b_key])
+                #par[z_key], par[z_cache_key] = affine_forward(par[a_prev_key], self.params[W_key], self.params[b_key])
                 scores = par[z_key]
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -333,9 +345,17 @@ class FullyConnectedNet(object):
             dbatch_prev_key = 'dbatch' + str(k - 1)
             batch_cache_key = 'batch_cache' + str(k)
 
+            dd_key = 'dd' + str(k)
+            d_cache_key = 'd_cache' + str(k)
+
             loss += 0.5*reg * np.sum(self.params[W_key] * self.params[W_key])
             if k == self.num_layers:
-                par[da_prev_key], grads[W_key], grads[b_key] = affine_backward(dscores, par[z_cache_key])
+                if self.use_dropout:
+                    par[dd_key], grads[W_key], grads[b_key] = affine_backward(dscores, par[z_cache_key])
+                    par[da_prev_key] = dropout_backward(par[dd_key], par[d_cache_key])
+                else:
+                    par[da_prev_key], grads[W_key], grads[b_key] = affine_backward(dscores, par[z_cache_key])
+                #par[da_prev_key], grads[W_key], grads[b_key] = affine_backward(dscores, par[z_cache_key])
                 if self.use_batchnorm:
                     par[dbatch_prev_key] = relu_backward(par[da_prev_key], par[a_prev_cache_key])
                 else:
@@ -343,7 +363,14 @@ class FullyConnectedNet(object):
             elif k > 1:
                 if self.use_batchnorm:
                     par[dz_key], grads[gamma_key], grads[beta_key] = batchnorm_backward(par[dbatch_key], par[batch_cache_key])
-                par[da_prev_key], grads[W_key], grads[b_key] = affine_backward(par[dz_key], par[z_cache_key])
+                
+                if self.use_dropout:
+                    par[dd_key], grads[W_key], grads[b_key] = affine_backward(par[dz_key], par[z_cache_key])
+                    par[da_prev_key] = dropout_backward(par[dd_key], par[d_cache_key])
+                else:
+                    par[da_prev_key], grads[W_key], grads[b_key] = affine_backward(par[dz_key], par[z_cache_key])
+                
+                #par[da_prev_key], grads[W_key], grads[b_key] = affine_backward(par[dz_key], par[z_cache_key])
                 if self.use_batchnorm:
                     par[dbatch_prev_key] = relu_backward(par[da_prev_key], par[a_prev_cache_key])
                 else:
